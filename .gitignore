@@ -1,0 +1,5 @@
+﻿.env
+.idea/
+docker-compose.yml
+postgres-data/
+sql/
