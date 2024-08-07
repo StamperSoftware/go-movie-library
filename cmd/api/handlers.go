@@ -1,8 +1,6 @@
 ﻿package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
@@ -16,32 +14,16 @@ func (app *application) Home(w http.ResponseWriter, r *http.Request) {
 		Message: "Movie Library Home",
 		Version: "1.0.0",
 	}
-	out, err := json.MarshalIndent(payload, "", "\t")
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(out)
+	app.writeJSON(w, http.StatusOK, payload)
 }
 
 func (app *application) Movies(w http.ResponseWriter, r *http.Request) {
 	movies, err := app.DB.AllMovies()
 
 	if err != nil {
-		fmt.Println(err)
+		app.errorJSON(w, err)
 		return
 	}
 
-	out, err := json.MarshalIndent(movies, "", "\t")
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(out)
+	app.writeJSON(w, http.StatusOK, movies)
 }
