@@ -1,7 +1,6 @@
 ﻿package main
 
 import (
-	"flag"
 	"fmt"
 	"github.com/joho/godotenv"
 	"log"
@@ -9,23 +8,26 @@ import (
 	"movie-library/internal/repository/dbrepo"
 	"net/http"
 	"os"
+	"time"
 )
 
 const port = 8080
 
 type application struct {
-	Domain string
-	DSN    string
-	DB     repository.DatabaseRepo
+	Domain       string
+	DSN          string
+	DB           repository.DatabaseRepo
+	auth         Auth
+	JWTIssuer    string
+	JWTAudience  string
+	CookieDomain string
+	JWTSecret    string
 }
 
 func main() {
 	//set app config
 	var app application
 
-	//read from command line
-	flag.StringVar(&app.DSN, "dsn", "host=localhost port=5432 user=postgres password=postgres dbname=movies sslmode=disable timezone=UTC connect_timeout=5", "Postgres connection string")
-	flag.Parse()
 	err := godotenv.Load()
 
 	if err != nil {
@@ -38,6 +40,12 @@ func main() {
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 
+	app.JWTSecret = os.Getenv("JWT_SECRET")
+	app.JWTIssuer = os.Getenv("JWT_ISSUER")
+	app.JWTAudience = os.Getenv("JWT_AUDIENCE")
+	app.CookieDomain = os.Getenv("COOKIE_DOMAIN")
+	app.Domain = os.Getenv("DOMAIN")
+
 	app.DSN = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5", dbHost, dbPort, dbUser, dbPassword, dbName)
 
 	//connect to db
@@ -45,11 +53,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	app.DB = &dbrepo.PostgresDBRepo{DB: conn}
 	defer app.DB.Connection().Close()
 
+	app.auth = Auth{
+		Issuer:        app.JWTIssuer,
+		Audience:      app.JWTAudience,
+		Secret:        app.JWTSecret,
+		TokenExpiry:   time.Minute * 15,
+		RefreshExpiry: time.Hour * 24,
+		CookieDomain:  app.CookieDomain,
+		CookiePath:    "/",
+		CookieName:    "__Host-refresh_token",
+	}
+
 	//start web server
-	app.Domain = "example.com"
 	log.Println("starting application on port:", port)
 
 	err = http.ListenAndServe(fmt.Sprintf(":%d", port), app.routes())

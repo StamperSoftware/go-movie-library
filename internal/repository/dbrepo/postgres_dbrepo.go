@@ -49,3 +49,20 @@ func (m *PostgresDBRepo) AllMovies() ([]*models.Movie, error) {
 func (m *PostgresDBRepo) Connection() *sql.DB {
 	return m.DB
 }
+
+func (m *PostgresDBRepo) GetUserByEmail(email string) (*models.User, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	log.Println(email)
+	query := `select id, first_name, last_name, email, password, created_at, updated_at from users where email = $1`
+	var user models.User
+	row := m.DB.QueryRowContext(ctx, query, email)
+	log.Println(row)
+	err := row.Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Password, &user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
