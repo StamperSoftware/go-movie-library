@@ -2,8 +2,9 @@
 
 import (
 	"errors"
-	"log"
+	"github.com/golang-jwt/jwt/v4"
 	"net/http"
+	"strconv"
 )
 
 func (app *application) Home(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +45,6 @@ func (app *application) Authenticate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := app.DB.GetUserByEmail(requestPayload.Email)
-	log.Println(user)
 	if err != nil {
 		app.errorJSON(w, errors.New("invalid credentials"), http.StatusBadRequest)
 		return
@@ -69,8 +69,70 @@ func (app *application) Authenticate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println(tokens.Token)
 	refreshCookie := app.auth.GetRefreshCookie(tokens.RefreshToken)
 	http.SetCookie(w, refreshCookie)
 	app.writeJSON(w, http.StatusAccepted, tokens)
+}
+
+func (app *application) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	for _, cookie := range r.Cookies() {
+		if cookie.Name == app.auth.CookieName {
+			claims := &Claims{}
+			refreshToken := cookie.Value
+
+			_, err := jwt.ParseWithClaims(refreshToken, claims, func(token *jwt.Token) (interface{}, error) {
+				return []byte(app.JWTSecret), nil
+			})
+
+			if err != nil {
+				app.errorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+				return
+			}
+
+			userID, err := strconv.Atoi(claims.Subject)
+
+			if err != nil {
+				app.errorJSON(w, errors.New("unknown user"), http.StatusUnauthorized)
+				return
+			}
+
+			user, err := app.DB.GetUserByID(userID)
+			if err != nil {
+				app.errorJSON(w, errors.New("unknown user"), http.StatusUnauthorized)
+				return
+			}
+
+			u := jwtUser{
+				ID:        user.ID,
+				FirstName: user.FirstName,
+				LastName:  user.LastName,
+			}
+
+			tokenPairs, err := app.auth.GenerateTokenPair(&u)
+
+			if err != nil {
+				app.errorJSON(w, errors.New("error generating token"), http.StatusUnauthorized)
+				return
+			}
+			http.SetCookie(w, app.auth.GetRefreshCookie(tokenPairs.RefreshToken))
+			app.writeJSON(w, http.StatusOK, tokenPairs)
+		}
+	}
+}
+
+func (app *application) Logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, app.auth.GetExpiredRefreshCookie())
+	w.WriteHeader(http.StatusAccepted)
+
+}
+
+func (app *application) MovieCatalog(w http.ResponseWriter, r *http.Request) {
+	movies, err := app.DB.AllMovies()
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, movies)
 }
