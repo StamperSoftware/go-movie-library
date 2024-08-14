@@ -1,9 +1,16 @@
 ﻿package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
+	"io"
+	"log"
+	"movie-library/internal/models"
 	"net/http"
+	"net/url"
 	"strconv"
 )
 
@@ -20,6 +27,17 @@ func (app *application) Home(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusOK, payload)
 }
 
+func (app *application) Genres(w http.ResponseWriter, r *http.Request) {
+	genres, err := app.DB.Genres()
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, genres)
+}
+
 func (app *application) Movies(w http.ResponseWriter, r *http.Request) {
 	movies, err := app.DB.AllMovies()
 
@@ -29,6 +47,123 @@ func (app *application) Movies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.writeJSON(w, http.StatusOK, movies)
+}
+
+func (app *application) Movie(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	movie, err := app.DB.GetMovieByID(id)
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, movie)
+}
+
+func (app *application) PostCreateMovie(w http.ResponseWriter, r *http.Request) {
+	var movie models.Movie
+	err := app.readJSON(w, r, &movie)
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	movie = app.GetMoviePoster(movie)
+	newId, err := app.DB.CreateMovie(movie)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	err = app.DB.CreateMovieGenre(newId, movie.GenresArray)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	resp := JSONResponse{
+		Error:   false,
+		Message: "movie updated",
+	}
+
+	app.writeJSON(w, http.StatusAccepted, resp)
+}
+
+func (app *application) PutUpdateMovie(w http.ResponseWriter, r *http.Request) {
+	var movie models.Movie
+	err := app.readJSON(w, r, &movie)
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	err = app.DB.UpdateMovie(movie)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	err = app.DB.CreateMovieGenre(movie.ID, movie.GenresArray)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	resp := JSONResponse{
+		Error:   false,
+		Message: "movie updated",
+	}
+
+	app.writeJSON(w, http.StatusAccepted, resp)
+}
+
+func (app *application) CreateMovie(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	movie, err := app.DB.GetMovieByID(id)
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := struct {
+		Movies *models.Movie `json:"movies"`
+	}{movie}
+
+	app.writeJSON(w, http.StatusOK, payload)
+}
+
+func (app *application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	err = app.DB.DeleteMovie(id)
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}{false, "Movie Deleted"}
+
+	app.writeJSON(w, http.StatusOK, payload)
 }
 
 func (app *application) Authenticate(w http.ResponseWriter, r *http.Request) {
@@ -135,4 +270,50 @@ func (app *application) MovieCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.writeJSON(w, http.StatusOK, movies)
+}
+
+func (app *application) GetMoviePoster(movie models.Movie) models.Movie {
+	type TheMovieDB struct {
+		Page    int `json:"page"`
+		Results []struct {
+			PosterPath string `json:"poster_path"`
+		} `json:"results"`
+		TotalPages int `json:"total_pages"`
+	}
+
+	client := &http.Client{}
+	movieDBUrl := fmt.Sprintf("https://api.themoviedb.org/3/search/movie?api_key=%s", app.MovieDBAPIKey)
+
+	req, err := http.NewRequest("GET", movieDBUrl+"&query="+url.QueryEscape(movie.Title), nil)
+
+	if err != nil {
+		log.Println(err)
+		return movie
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+		return movie
+	}
+
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		log.Println(err)
+		return movie
+	}
+
+	var responseObject TheMovieDB
+	json.Unmarshal(bodyBytes, &responseObject)
+
+	if len(responseObject.Results) > 0 {
+		movie.Image = responseObject.Results[0].PosterPath
+	}
+
+	return movie
 }

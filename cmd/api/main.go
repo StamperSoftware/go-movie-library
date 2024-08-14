@@ -14,14 +14,15 @@ import (
 const port = 8080
 
 type application struct {
-	Domain       string
-	DSN          string
-	DB           repository.DatabaseRepo
-	auth         Auth
-	JWTIssuer    string
-	JWTAudience  string
-	CookieDomain string
-	JWTSecret    string
+	Domain        string
+	DSN           string
+	DB            repository.DatabaseRepo
+	auth          Auth
+	JWTIssuer     string
+	JWTAudience   string
+	CookieDomain  string
+	JWTSecret     string
+	MovieDBAPIKey string
 }
 
 func main() {
@@ -45,6 +46,7 @@ func main() {
 	app.JWTAudience = os.Getenv("JWT_AUDIENCE")
 	app.CookieDomain = os.Getenv("COOKIE_DOMAIN")
 	app.Domain = os.Getenv("DOMAIN")
+	app.MovieDBAPIKey = os.Getenv("MOVIE_DB_API_KEY")
 
 	app.DSN = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5", dbHost, dbPort, dbUser, dbPassword, dbName)
 
