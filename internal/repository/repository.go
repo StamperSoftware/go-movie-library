@@ -6,7 +6,7 @@ import (
 )
 
 type DatabaseRepo interface {
-	AllMovies() ([]*models.Movie, error)
+	AllMovies(genre ...int) ([]*models.Movie, error)
 	Genres() ([]*models.Genre, error)
 	Connection() *sql.DB
 	GetUserByEmail(email string) (*models.User, error)

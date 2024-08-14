@@ -39,7 +39,18 @@ func (app *application) Genres(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) Movies(w http.ResponseWriter, r *http.Request) {
-	movies, err := app.DB.AllMovies()
+	genreID, err := strconv.Atoi(r.URL.Query().Get("genre"))
+	var movies []*models.Movie
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	if genreID != 0 {
+		movies, err = app.DB.AllMovies(genreID)
+	} else {
+		movies, err = app.DB.AllMovies()
+	}
 
 	if err != nil {
 		app.errorJSON(w, err)
@@ -316,4 +327,21 @@ func (app *application) GetMoviePoster(movie models.Movie) models.Movie {
 	}
 
 	return movie
+}
+
+func (app *application) GetMoviesByGenre(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.URL.Query().Get("genre"))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	movies, err := app.DB.AllMovies(id)
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, movies)
 }

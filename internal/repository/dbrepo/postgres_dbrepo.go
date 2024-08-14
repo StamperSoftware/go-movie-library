@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"movie-library/internal/models"
 	"time"
@@ -47,13 +48,17 @@ func (m *PostgresDBRepo) Genres() ([]*models.Genre, error) {
 	return genres, nil
 }
 
-func (m *PostgresDBRepo) AllMovies() ([]*models.Movie, error) {
+func (m *PostgresDBRepo) AllMovies(genres ...int) ([]*models.Movie, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	var movies []*models.Movie
-	query := `select id, title, release_date, runtime, mpaa_rating, description, coalesce(image, ''), created_at, updated_at from movies order by title`
+	where := ""
+	if len(genres) > 0 {
+		where = fmt.Sprintf("where id in (select movie_id from movies_genres where genre_id = %d)", genres[0])
+	}
+	query := fmt.Sprintf(`select id, title, release_date, runtime, mpaa_rating, description, coalesce(image, ''), created_at, updated_at from movies %s order by title`, where)
 	rows, err := m.DB.QueryContext(ctx, query)
 
 	if err != nil {
