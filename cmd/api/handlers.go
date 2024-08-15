@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"io"
 	"log"
+	"movie-library/internal/graph"
 	"movie-library/internal/models"
 	"net/http"
 	"net/url"
@@ -344,4 +345,26 @@ func (app *application) GetMoviesByGenre(w http.ResponseWriter, r *http.Request)
 	}
 
 	app.writeJSON(w, http.StatusOK, movies)
+}
+
+func (app *application) GraphQL(w http.ResponseWriter, r *http.Request) {
+
+	movies, _ := app.DB.AllMovies()
+
+	q, _ := io.ReadAll(r.Body)
+	query := string(q)
+	g := graph.New(movies)
+	g.QueryString = query
+
+	resp, err := g.Query()
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	j, _ := json.MarshalIndent(resp, "", "\t")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(j)
 }
